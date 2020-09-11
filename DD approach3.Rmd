@@ -1,0 +1,607 @@
+---
+title: "Difference in Difference, de los Marielitos a la Euskadi Ta Askatasuna"
+author: "Federico Daverio"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    theme: united
+    highlight: tango
+    toc_float:
+      collapsed: true
+      smooth_scroll: false
+bibliography: references.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introducción
+
+Desde el brote colera de 1854 en la calle Broad [@CerdaL2007] los “experimentos naturales” tomaron un papel fundamental en las ciencias sociales y en particular en economía. La estructura federativa de Estados Unidos y otros países resultó ser un terreno fértil para esta tipología de experimentos naturales o cuasi-experimentos [@Dinardo2010]. En particular permite evaluar la eficacia de las políticas públicas adoptadas [@besley] gracias a implementaciones desemejantes de estas por parte de los diferentes estados de la confederación, desde un punto de vista temporal y/o legislativo.  
+
+Un experimento natural inducido por un cambio de una política pública puede permitir, teóricamente, a los investigadores observar la variación exógena de la variable objecto de estudio. Esto resulta ser de particular importancia en situaciones en que las estimaciones suelen estar sesgadas debido a variaciones endógenas causadas por variables omitidas o fenómenos de autoselección [@meyer95]. Normalmente consideramos una política pública como una intervención por parte del estado vuelta a mejorar una determinada situación o resolver un problema. En realidad, como veremos en nuestro caso, este concepto puede ser extendidos a intervenciones que tienen un impacto “macro” georreferenciado y que tiene una finalidad especifica. En particular, como veremos en nuestro análisis, el terrorismo vasco puede ser tratado como un experimento natural dado su repentino outbreak y el fuerte impacto que tuvo en la vida económica y social de toda España. 
+
+Una de las herramientas mas utilizada para esta tipología de estudios, desde un punto de vista econométrico, es el análisis Difference-in-Difference (DD). Usualmente esta técnica resulta ser particularmente efectiva en la evaluación del impacto de ciertos eventos o políticas respecto a los cuales tenemos dos conjuntos de datos transversales, recolectados antes y después de la ocurrencia de un evento [@wooldridge2009], para determinar el efecto sobre la variable objeto de estudio.  El método DD se ha utilizado en cientos de estudios en economía, especialmente en las últimas dos décadas, pero la idea básica tiene una larga historia. El primer ejemplo en economía laboral es Lester [@lester], que utilizó la técnica de diferencias en diferencias para estudiar efectos en el empleo de los salarios mínimos [@labour].
+
+En particular la DD analiza los diferentes valores tomados por las diferentes variables en un grupo definido como tratado y uno de control, los cuales no vienen definidos de manera aleatoria, sino cualitativamente. Justo por la ausencia de aleatoriedad en el experimento resulta fundamental escoger un grupo de control que resulte adecuado [@meyer95]. Por intentar obviar a este problema, se desarrollaron técnicas econométricas distintas y metodología para identificar óptimamente el grupo de control.  
+
+
+```{r, include=FALSE}
+rm(list = ls())
+options (scipen = 999)
+install.packages("dplyr",repos = "http://cran.us.r-project.org")
+install.packages("tidyverse",repos = "http://cran.us.r-project.org")
+install.packages("RColorBrewer",repos = "http://cran.us.r-project.org")
+install.packages("kernlab",repos = "http://cran.us.r-project.org")
+install.packages("Synth",repos = "http://cran.us.r-project.org")
+library(dplyr)
+library(Synth)
+library(tidyverse)
+library(RColorBrewer)
+library(stargazer)
+library(AER)
+load("C:/Users/feder/Desktop/paper econometria/Synth_1.1-5/Synth/data/basque.rda")
+colourCount = length(unique(basque$regionname))
+getPalette = colorRampPalette(brewer.pal(12, "Set3"))
+```
+
+# Analisís Difference-in-Difference
+
+## Ventajas Difference-in-Difference
+
+Una de las principales ventajas de la DD es su relativa simplicidad además de su potencial en evitar muchos problemas de endogeneidad que surgen típicamente cuando se hacen comparaciones entre individuos heterogéneos. Además, es un método flexible que nos permite diferenciar los tiempos en que se implementaron las diferentes las políticas publicas y la diferente intensidad con que se aplicaron.  
+
+En su forma más sencilla, cuando tenemos dos conjuntos de datos trasversales, como en el estudio sobre los efectos del salario mínimo sobre el empleo en el caso de estudio del sector de la comida fast food en New Jersey y Pennsylvania de Card y Krueger [@cardminimum] o como en el estudio de los diferentes trends en las quiebras de los bancos durante la gran depresión entre los distritos federeales 6 y 8 (el celebérrimo “one Mississipi, two Mississipi” [@angrist]), tendremos:
+
+1. Una variable dummies $TRAT_d$ donde la $d$ toma valor de 1 en el grupo tratado y 0 en el de control y absorbe los efectos fijos de la variación geográfica que no se debe al tratamiento.
+
+2.  Una variable dummies $POST_t$ donde el subíndice indiqua el momento post-pre tratamiento y absorbe las variaciones temporal que no se debe al tratamiento. 
+
+3. El termino de interacción, $ TRAT_d POST_t $el cuyo coeficiente representa el efecto causal de la DD.
+
+La regresión DD tomará por lo tanto la siguiente forma:
+
+$$ Y_{dt} = \beta_0 + \beta_1 TRAT_d  + \beta_2 POST_t + \beta_{DD} (TRAT_d POST_t ) + e_{dt}$$
+
+Como vimos $\beta_{DD}$ es el coeficiente causal que estamos buscando y coincidirá en el caso de solo dos cortes trasversales con:
+
+$$\delta_{DD}=(Y_{0,1}-Y{0,0}) – (Y_{1,1}- Y_{1,0})$$
+
+Con $Y_{d,t}$ que indica los relativos valores (por grupo y tiempo) de la variable objeto de estudio. En caso de tener solo dos cortes transversales tendremos que $\delta_{DD}= \beta_{DD}$ (a causa de las propriedades que vimos en clase de las regresiones con variables dummies), mientras si tenemos más de dos periodos las estimaciones de $\beta_{DD}$ resultan ser más fidedigno respeto a los efectos del evento/política publica en comparación a $\delta_{DD}$ aunque conlleve unas problemáticas respeto a sus valores de desviación estándar si no se efectúan los ajuste necesarios [@duflo], como veremos. Además, por medio de la regresión se pueden añadir variables de control para excluir fenómenos peculiares de los dos grupos. 
+
+Para que el estudio Difference-in-Difference pueda tener valides el DD contrafactual debe tener relevancia estadística, eso se garantiza en parte gracias 	al supuesto de “common trends” antes del tratamiento para los dos grupos analizado. Este análisis puede ser cuantitativa, pero necesita siempre también de un estudio cualitativo. Más datos tengamos, más podemos testar este supuesto, probarlo estadísticamente y eventualmente relajarlo. El gap entre el contrafactual y el andamiento real del grupo tratado representa el impacto del evento/política pública. 
+
+## Problemáticas Difference-in-Difference
+
+Los estudios DD conllevan unos problemas típicos de los análisis empíricos. En particular un estudio de Campbell [@Campbell1957] identifica algunas amenazas a la validez interna y externa de los resultados obtenidos. Sintetizando su análisis obtenemos que las principales problemáticas relativas a la validez interna, ósea cuando la variación de la variable explicada por medio de las variables independientes no resulta significativa estadísticamente:
+
+1.	Variables omitidas: hay eventos, no considerados en las variables explicativas utilizadas, que determinan la variación de los resultados.
+
+2.	Trends en los resultados: existen procesos ligados al pasar del tiempo, como el envejecimiento de la población, que influyen sobre los resultados.
+
+3.	Varianzas mal especificadas: la sobreestimación de la significatividad estadística de los resultados causadas por desviaciones estándares mal calculadas a causa de fenómenos de autocorrelación y la falta de medida correctivas [@duflo].
+
+4.	Mediciones erróneas: errores en la metodología de encuesta o cambios en esta a lo largo del tiempo, como en el caso de la medición de la pobreza de Coneval [@coneval] o en el caso de preguntas sesgadas como en la Current Population Survey [@kalton].
+
+5.	Políticas económicas: endogeneidad de las políticas publicas causada por respuestas del gobierno respeto a las variables asociadas con resultados, pasado o futuros, esperados.
+
+6.	Simultaneidad: endogeneidad de las variables explicativas dado su proceso de determinación simultaneo con la variable explicada.
+
+7.	Selección: la asignación de una observación al “grupo tratado” de manera que conlleve una correlación entre la asignación y los resultados en ausencia de tratamiento [@ashenfelter].
+
+8.	Atrición: la “pérdida diferencial” de los encuestados entre el grupo tratado y el de control [@hausman].
+
+9.	Interacciones omitidas: diferentes “trends” presentes en el grupo tratado y el de control o variables omitidas que varían diferentemente entre los dos grupos.
+
+10.	Forma funcional: la relación viene modelada por medio de una “forma poblacional” equivocada.
+
+Por lo que concierne la validez externa, los estudios Difference-in-Difference toman como referencia grupos específicos con determinadas características, las amenazas a la validez externas a los resultados encontrados representan todas las problemáticas relativas a la posibilidad de generalizar las deducciones obtenidas, en particular  Cook y Campbell [@cook79] identifican tres amenazas principales:
+
+1.	Interacción de la selección y el tratamiento: el grupo tomado como referencia. 
+
+2.	Interacción del contexto y el tratamiento: los efectos del evento/política pública/ tratamiento puede diferir en contextos geográfica e institucionalmente distintos.
+
+3.	Interacción de la historia y el tratamiento: los efectos individuados en el estudio a razón del evento/tratamiento pueden ser diferentes en momentos históricos distintos.
+
+Los estimadores de la DD y sus relativas desviaciones estándar son obtenidas solitamente utilizando el método de los mínimos cuadrados ordinarios (OLS en inglés) en datos de corte transversales (o de panel) de un grupo de individuos “tratados” y un grupo de control. Muchas veces los datos utilizados en el análisis describen los valores de las variables explicativas y la explicada varios años antes y después del tratamiento. Una de las principales problemáticas es encontrar un grupo de control adecuado siendo que la “aleatorización” del experimento es natural y por ende puede conllevar problemas de endogeneidad. Para obviar a este problema se desarrollaron diferentes técnicas econométricas que intentan “crear” un grupo de control más confiable como en el caso del control sintético. El objetivo de nuestro estudio es averiguar si efectivamente la definición distinta del grupo de control determina diferencias estadísticamente significativas de los resultados obtenidos, y como las correcciones de datos relativos a series de tiempo larga afecta la desviación estándar del coeficiente de la DD.
+
+## Los Marielitos: un análisis 
+
+Uno de los estudios que fueron de parte agua para el utilizo de la Difference-In-Difference fue el análisis del impacto sobre el mercado laboral de Miami del desembarco de los Marielitos efectuado por Card en el 1990 [@card90]. A partir de mayo hasta el septiembre de 1980 desembarcaron en cuba 125.000 cubanos gracias a un decreto de Fidel Castro que permitía salir de la isla. Más de la mitad quedaron los siguientes 5 años en la ciudad de Florida incorporándose al mercado laboral. Esto resultó ser un experimento natural cuasi perfecto que fue aprovechado por el economista canadiense para un estudio del impacto cuantitativo de la migración en los mercados laborales. Según las teorías clásicas y neoclásicas se habría tenido que deprimir los salarios y aumentar el desempleo a causa de el aumento de la oferta de trabajo. Lo que demostró Card, con un estudio Difference-in-Difference a partir de los datos de la Current Population Survey entre 1979 y 1985, es que a pesar de un aumento de la fuerza laboral del 7% en Miami, no hubo prácticamente afectaciones en los niveles salariales y de desempleo de los trabajadores con menos capacidades (que representaban el sector laboral a donde se incorporó la mayoría de los Marielitos).  
+
+![Migración in Miami ](paper econometria\immigration number.PNG)
+
+Este resultado fue muy controvertido sobre todo porque no había teorías solidas para justificarlo. Lewis [@lewis] intentó encontrar una justificación en el aumento de la producción manufacturera “low-skilled labor intensive” consecuente que pudo absorber el exceso de oferta. Bodvarsson [@bod] apuntó que una de las razones por la cual la inmigración no tiene un efecto negativo evidente en los salarios de los locales es que los inmigrantes como consumidores contribuyeron a la demanda agregada reequilibrando el equilibro entre demanda y oferta. 
+
+Borjas en 2015 [@borjas] mostró resultados muy diferentes sosteniendo que los descubrimientos de Card se basaban sobre una elección equivocada del grupo de control, siendo que por lo menos el 60% de los Marielitos habían solo el título de secundaria, se tenía que analizar los salarios de la fuerza laboral con esta determinada característica. Sus resultados llevan a una caída entre el 10% y el 30% (dependiendo del grupo de control tomado como referencia) entre la fuerza laboral que tenía un titulo de secundaria. 
+
+Finalmente, Peri y Yasenov [@peri] rexaminaron los datos de Card y en lugar de utilizar la DD, utilizaron el control sintético. Esta técnica permite crear un grupo de control ad hoc que pueda representar de la mejor forma posible el grupo en examen antes del tratamiento. A partir de esto descubrieron que se encontraba una desviación negativa significativa solo en el caso de utilizar los datos de la March Current Population Survey. Además, esta disminución resultaba relevante solo en comparación a un subgrupo obtenido eliminando mujeres, hispánicos y seleccionando solo personas con segundaria entre los 25 y 59 años. Esto dejaba muy pocas observaciones (entre 15 y 20) afectando la desviación estándar del estimador calculado. Además, sostienen que esta clusterización arbitraria excluyo grupo de trabajadores que si hubieran tenidos ser afectados en sus sueldos por la inmigración masiva. Reportamos el análisis de sensibilidad que Peri y Yasenov del paper de Borjas cambiando los grupos de control y la fuente de los datos: 
+
+![Analisís sensitividad](paper econometria\sensitiviti.PNG)
+
+Utilizando el control sintético y incluyendo estos grupos demostraron que los resultados obtenidos eran similares a los de Card. Este análisis nos permite entender como sea fundamental la definición correcta del grupo de control para obtener resultados consistentes estadísticamente. Además, nos permite analizar diferencias metodológicas econométricas que investigaremos más profundamente en la próxima sección.  
+
+Naturalmente el estudio de Card tiene numerosos interrogantes respeto a su validez a partir de los elementos proporcionado por el análisis de la primera parte:
+
+* Validación interna
+
++ Interacciones omitidas: como vimos Bodvarsson [@bod] pueden haberse presentados trends diferentes entre el grupo de control y el tratado, en este caso particular el aumento de la demanda debido al gasto local de los migrantes y la relativa expansión de la demanda agregada no tuvo lugar en el grupo de control
+    
++ Varianzas mal especificadas: como vimos dado que Card no efectúa correcciones en la matriz de varianza y covarianza fenómenos de autocorrelación entre los números cortes trasversales podrían haber falsado la significatividad de   los estimadores encontrados
+    
+* Validación externa
+
++ Interacción del contexto y el tratamiento: Miami fue un natural puerto de arribo para las cubanas y los cubanos que buscaban nuevas oportunidades, por lo tanto, su mercado laboral se había adaptado para amortiguar de la manera más eficiente las olas migratorias. Un fenómeno similar en otra ciudad de estados unidos o del mundo podría dar resultados diferentes     
+
+
+# Crecimiento económico y situaciones de conflicto
+
+Uno de los grandes interrogantes de numerosos estudios macroeconómico es la cuantificación del impacto de la instabilidad política y las situaciones de conflicto sobre el desarrollo de un País (medido en nuestro caso por el PIB). Para intentar cuantificar este fenómeno Abadie y Gardeazabal [@ardie] aprovecharon dos hechos históricos españoles (una disculpa a los vascos) que trataron como experimentos naturales o cuasi-experimentos. El primero es el inicio de la actividad terrorista del ETA, un grupo armado que luchaba por la independencia de los países vascos, mientras el segundo es el armisticio que se firmó entre este grupo y el gobierno español que duró 14 meses. Mientras este ultimo fue estudiado por medio de un análisis diferencial del valor de las acciones de las empresas vascas vs la del resto de España, para evaluar el impacto del conflicto para la liberación de los países vascos se utilizó un control sintético. Nos enfocaremos en este último análisis y haremos el camino inverso del paper de Card, a partir de la réplica del control sintético intentaremos hacer un análisis de diferencia en diferencia. Además, testaremos los resultados obtenidos y la consistencia de las desviaciones estándares que obtuvimos, siendo esta ultima una problemática de la mayoría de los estudios DD [@duflo].
+
+## Análisis de la base de datos
+
+```{r}
+#analisís de la base de datos
+head(basque)
+names(basque)
+```
+El data frame utilizado para nuestro estudio comprende:
+
+* 18 unidad: 1 que describe el grupo tratado (# 17; el país Vasco) y 16 regiones de control (# 2-#16, #18). La región #1 representa el promedio de los indicadores para toda España. 
+
+* 1 variable explicada (gdpcap). 
+
+* 13 variables explicativas (6 shares de la actividad productiva sectorial, 6 indicadores de máximo grado de estudio, densidad poblacional, y la tasa de inversión). 
+
+* El nombre de las regiones y su identificativo son contenidas en las columnas regionno and regionname. 
+
+* 42 periodo (1955 - 1997). 
+
+Las columnas del database indican:
+
+* regionno: nuemero identificativo de la región 
+
+* regionname: nombre de la región 
+
+* year: año 
+
+* gdpcap: PIB per capita (en miles de dólares, normalizado al 1986)
+
+* sec.agriculture, sec.energy, sec.industry, sec.construction, sec.energy, sec.energy: porcentaje de la producción total del sector indicado.
+
+* school.illit, school.prim, school.med ,school.high, school.post.high : numero de personas con el grado maximo de titulación indicado en la etiqueta de columna indicado.
+
+* popdens: densidad de la población (personas por kilómetros cuadrad)
+
+* invest: inversion bruta como percentage del PIB 
+
+Para analizar el impacto de la actividad terrorista del ETA, así como hecho por Abadie y Gardeazabal, creamos una tabla con el numero de homicidios y secuestros atributos al ETA durante su existencia (hasta el 2000), a partir de los datos del Ministerio de los Interiores español del 2002. En particular nuestra tabla tendrá las siguientes variables:
+
+* year=año
+
+* killings= homicidios por mano del ETA
+
+* kidnappings= secuestros efectuados por el ETA
+
+* kk= suma de homicidios y secuestros para obtener una proxy de la intensidad de la actividad terrorista del ETA
+
+```{r}
+etadb<-data.frame(read.csv("C:/DAVE2/CIDE/2_semestre/Econometria_I/R/DB/ETA_attacks.csv"))
+names(etadb)
+```
+
+
+Analizamos la serie histórica del PIB de las diferentes regiones españolas (excluiremos las islas Baleares por su escasa significatividad respeto a la variable en examen). Se adjuntan además las grafica del andamiento del Producto interno para solo las 3 y las 6 regiones más “ricas” de la península ibérica. En la segunda grafica se puede apreciar con mayor disminución más acentuada y atípica del PIB vasco. 
+
+```{r, echo=FALSE}
+
+ggplot(data= subset(basque, regionname != "Baleares (Islas)" & regionno != "1"), aes(x=year, y=gdpcap, group=regionname)) +
+  geom_line(aes(color=regionname))+
+  scale_fill_manual(values = getPalette(colourCount))+ theme_bw()
+
+#subplot 3 "best PIB"  en el arco de tiempo analizado
+ggplot(data= subset(basque, regionno == 14 | regionno == 10 | regionno == 17), aes(x=year, y=gdpcap, group=regionname)) +
+  geom_line(aes(color=regionname))+
+  scale_fill_manual(values = getPalette(colourCount))+ theme_bw()
+
+
+#subplot 6 "best PIB" regiones mejores en el arco de tiempo analizado
+ggplot(data= subset(basque, regionno == 14 | regionno == 10 | regionno == 17| regionno == 16| regionno == 18), aes(x=year, y=gdpcap, group=regionname)) +
+  geom_line(aes(color=regionname))+
+  scale_fill_manual(values = getPalette(colourCount))+ theme_bw()
+
+
+```
+
+En el análisis hecha por los autores se identifica que la mayor parte de la actividad delictiva del ETA es circunscribidle a la región vasca, por ende, podemos considerar esta región como el grupo tratado esperando que los fenómenos de spill-over hayan sido contenidos. 
+
+![Actividad terrorista](paper econometria\eta activity.jpg)
+
+Analizando la serie histórica de los ataques terroristas vemos como esta toma fuerza a partir del 1975 para alcanzar su pico en los años entre el 1979 y el 1980. 
+
+```{r, echo=FALSE}
+#plot actividad terrorista ETA
+ggplot(data=etadb, aes(x=year)) + 
+  geom_line(aes(y = killings, color = "Homicidios")) + 
+  geom_line(aes(y = kidnappings, color = "Secustros")) + 
+  geom_line(aes(y = kk, color = "Total")) +
+  ylab("personas") +
+  labs("Actividad terrorista")+theme_bw()
+```
+
+Reunimos los dos data frame para analizar la respuesta del PIB a la actividad terrorista. Notamos que la actividad terrorista cobre importancia a partir del 1975, cabe recordar que cuando iniciaron los ataques del ETA en toda España hubo una crisis económica causada principalmente por el embargo petrolero dictado por los países del OPEC. Esto podría haber sido determinante en la caída del producto interno bruto vasco más allá de los actos del ETA. A pesar de esto, de los grafico previos podemos darnos cuenta de una caída del PIB de la región vasca más pronunciada respeto al resto de España. 
+
+```{r, echo=FALSE}
+db2<-left_join(basque,etadb,by="year")
+names(db2)
+#plot uno contra el otro
+ggplot(subset(db2,regionno == "17"), aes(x = year))+
+  geom_line(aes(y = gdpcap, colour = "PIB")) +
+  geom_line(aes(y = killings/10, colour = "Homicidios"),linetype = "dashed") +
+  scale_x_continuous() +
+  scale_y_continuous(sec.axis = sec_axis(~.*10,name = "Personas")) +
+  scale_colour_manual(values = c("blue", "red")) +
+  labs(y = "Pib per capita",
+              x = "Años",
+              colour = "Leyenda") 
+```
+
+Aunque parezca haber una correlación realmente nos dice poco siendo que no tenemos ningún contrafactual. 
+
+## El control sintético
+
+Construimos por lo tanto el control sintético, el código del paquete utilizado fue desarrollado por el mismísimo Abadie. Recordamos que el análisis de control sintético genera un promedio ponderado de las unidades no tratadas que coincide con la unidad tratada durante el período de pretratamiento y lo utiliza como el contrafactual. En particular se obtiene definiendo con $J$ el numero de potenciales controles (en nuestro caso 16) y $W=(w_1, \dots, w_j)$ un vector de pesos non negativos que representarán la participación del control en la unidad sintética. Sea ahora $X_1$ un vector de $(K \times 1)$ variables explicativas conteniente las variables explicativas pretratamiento de la región de control y $X_0$ una matriz $(K \times J)$ de los mismos valores para los controles candidatos. Sea $V$ una matriz diagonal con componentes no negativos, los valores de su diagonal reflejaran la relativa importancia de los diferentes predictores de la variable explicada. El vector de pesos $W^{*}$ es el que minimiza el programa matemático $(X_1 – X_0W)'V(X_1-X_0W)$ sujeto a $w_j \geq 0  \forall j \wedge w_1+ \dots + w_j =1$. La elección de $V$ puede ser echa en diferentes modos, aunque el control sintético tenga una mayor objetividad respeto a la Difference-In-Difference mantiene un cierto grado de discrecionalidad, y en nuestro caso fue escogida en base a las que permitían crear un control sintético que mejor pudiera reproducir el andamiento del GDP vasco en los años 60. ¡Ahora sí, el control sintético!
+
+```{r}
+#implementamos el control sintetico:
+
+#preparamos los datos, estmos creando las matrices que necesitaremos
+#para el control sintetico
+
+dataprep.out <- dataprep(
+   foo = basque,
+  predictors = c("school.illit", "school.prim", "school.med",
+                   "school.high", "school.post.high", "invest"),
+  predictors.op = "mean",
+  time.predictors.prior = 1964:1969,
+  special.predictors = list(
+    list("gdpcap", 1960:1969 , "mean"),
+    list("sec.agriculture", seq(1961, 1969, 2), "mean"),
+    list("sec.energy", seq(1961, 1969, 2), "mean"),
+    list("sec.industry", seq(1961, 1969, 2), "mean"),
+    list("sec.construction", seq(1961, 1969, 2), "mean"),
+    list("sec.services.venta", seq(1961, 1969, 2), "mean"),
+    list("sec.services.nonventa", seq(1961, 1969, 2), "mean"),
+    list("popdens", 1969, "mean")),
+  dependent = "gdpcap",
+  unit.variable = "regionno",
+  unit.names.variable = "regionname",
+  time.variable = "year",
+  treatment.identifier = 17,
+  controls.identifier = c(2:16, 18),
+  time.optimize.ssr = 1960:1969,
+  time.plot = 1955:1997)
+
+synth.out <- synth(data.prep.obj = dataprep.out, method = "BFGS")
+```
+
+Analizando la tabla de los pesos relativos de las regiones candidata potencialmente a ser parte del control sintético notamos que las únicas dos regiones que tienen pesos estrictamente positivos resultan ser Cataluña y Madrid. Recordando la primera graficas eran las únicas dos regiones que en los años pretratamiento tenían una economía más florida de la región de control.
+
+```{r}
+#analizamos la tabla de los pesos relativos
+synth.tables <- synth.tab(dataprep.res = dataprep.out, synth.res = synth.out)
+synth.tables$tab.w
+```
+
+Vemos que los pesos significativos asignados a nuestros grupo de control son para el 14 (0.149) y el 10 (0.851). Creamos una nueva tabla incluyendo la región ficticia del control sintético:
+
+```{r}
+#creamos la tabla con los nuevos valores
+db3 <- basque %>% select(1,2,3,4,16,17)
+tail(db3)
+names(db3)
+str(db3)
+yearn <- 1955
+yearn
+str(yearn)
+while (yearn < 1998 ) {
+  
+  
+  g<-filter(basque, year==yearn & regionno != 1 & regionno != 17)$gdpcap%*%synth.tables$tab.w$w.weights
+  p<-filter(basque,year==yearn & regionno != 1 & regionno != 17)$popdens%*%synth.tables$tab.w$w.weights 
+  i<-filter(basque,year==yearn & regionno != 1 & regionno != 17)$inv%*%synth.tables$tab.w$w.weights
+  r<-as.character("Region Sintetíca")
+  newrow<-data.frame(regionno=19,
+                     regionname= r,
+                     year= yearn,
+                     gdpcap=g,
+                     popdens=p,
+                     invest=i)
+  newrow$regionname <- as.character(newrow$regionname)                 
+  yearn<-yearn + 1
+  db3<-union(db3,newrow)
+  
+
+}
+str(db3)
+```
+
+Ahora ploteamos el andamiento del PIB real de los países vascos y el contrafactual para analizar las diferencias:
+
+```{r, echo=FALSE}
+ggplot(data= subset(db3, regionno == 19 | regionno == 17), aes(x=year, y=gdpcap, group=regionname)) +
+  geom_line(aes(color=regionname))+
+ geom_vline(xintercept = 1975, linetype = "dotted")
+
+gap<- (db3$gdpcap[ which(db3$regionno==17) ]-db3$gdpcap[ which(db3$regionno==19) ])/(db3$gdpcap[ which(db3$regionno==19) ])*100
+```
+Podemos notar que efectivamente hay una desviación negativa importante entre el andamiento del GDP hipotético de la unidad sintética y como efectivamente se desempeño la producción vasca. Analizamos finalmente la variación porcentual entre el PIB per cápita de la unidad sintética y el real con respeto al andamiento de la actividad terrorista del ETA: 
+
+```{r, echo=FALSE}
+#plot uno contra el otro
+ggplot(subset(db2,regionno == "17"), aes(x = year))+
+  geom_line(aes(y = gap, colour = "PIB")) +
+  geom_line(aes(y = killings/10, colour = "Homicidios"),linetype = "dashed") +
+  scale_x_continuous() +
+  scale_y_continuous(sec.axis = sec_axis(~.*10,name = "Personas")) +
+  scale_colour_manual(values = c("blue", "red")) +
+  labs(y = "% gap per capita",
+       x = "Años",
+       colour = "Leyenda")
+```
+
+De nuevo parece haber una relación causal entre la disminución del crecimiento y la inestabilidad política. Finalmente calculamos la diferencia porcentual total, y a partir del inicio de los ataques del grupo terrorista vasco, entre el PIB del grupo de control y el contrafactual para tener una aproximación del impacto negativo de la inestabilidad:
+
+```{r}
+#promedio del efecto negativo a partir del 75
+mean(gap)
+
+#promedio del efecto negativo a partir del 75
+mean(gap[20:43])
+```
+
+Hay que subrayar que el método de validación estadístico de los resultados obtenidos escogidos por parte de los investigadores fue un análisis impulso y respuesta y un estudio placebo que resultaron congruentes con las derivaciones del análisis sintético.
+
+## Análisis Difference-In-Difference
+
+Ahora sí efectuamos nuestro análisis Diff-en-Diff desandando el camino emprendido por el estudio de Card [@card90]. En nuestras reexaminaciones de las publicaciones económicas y econométricas sobre el desembarco de los Marielitos notamos que los resultados que se obtuvieron con el método sintético y el de Diff-en-Diff resultaron muy similares. Además, aprovecharemos de la diatriba respeto a los grupos de control surgida a partir del artículo de Borja, para averiguar las diferencias dada por el utilizo de diferentes grupos de control en nuestras regresiones.
+
+A partir de los datos recaudados por el estudio de Abadie y Gardeazabal [@ardie], modificamos el database para crear unas variables dummies que identifiquen el grupo tratado y el periodo postratamiento. 
+
+```{r}
+#dummie para tratamiento
+dbdd<- mutate(db3,post=ifelse(year>=1975,1,0))
+
+#dummie para grupo
+dbdd2<- mutate(dbdd,treat=ifelse(regionno==17,1,0))
+```
+
+A partir de esto efectuamos la regresión Difference-In-Difference que tomará la canónica forma: 
+$$ Y_{dt} = \beta_0 + \beta_1 TRAT_d  + \beta_2 POST_t + \beta_{DD} (TRAT_d POST_t ) + e_{dt}$$
+Por cuanto concierne la elección del grupo de control optamos para incluir todas las regiones de España a exclusión de las islas Balearias que, como vimos, no resultan significativas. La distribución de la variable explicada para el grupo de control (en rojo) y el grupo tratado (azul) es la siguiente:
+
+```{r, echo=FALSE}
+#analisis grafica regresion
+dbdd2 %>% 
+  filter(regionno!=1 & regionno!=5) %>% 
+  mutate(treat = if_else(treat == 1, "País Vasco", "Otras regiones")) %>% 
+  ggplot(aes(year, gdpcap, color = as.factor(treat))) + 
+  geom_point() + geom_vline(xintercept = 1975, linetype = "dotted") + 
+  geom_text(aes(x=1975, label="Inicio de conflicto", y =10), color = "black", angle=90, vjust = 1.2, 
+            size = 2.5) +
+  labs(color = "Región") +
+  theme(legend.position="bottom")
+```
+
+Podemos notar de la inspección grafica de las series de datos que efectivamente parece presentar una caída más acentuada el grupo tratado respecto a las regiones que harán parte de su grupo de control.  Recordamos que, a diferencia del método sintético, donde la subjetividad reside en escoger las variables para la matriz V, en este caso tenemos que escoger subjetivamente las regiones que harán parte del grupo de control. Nuestra hipótesis, sustentada en los datos de la tabla 2 de Abadie y Gardeazabal [@ardie], es que las demás regiones españolas no fueron afectadas de manera significativa por el terrorismo de ETA y puedan ser un buen grupo de control siendo que tienen uniformidad política y geográfica.
+
+Efectuamos la regresión DD con el grupo de control especificado:
+
+```{r}
+#primera regresión
+regdd<- lm(data=subset(dbdd2,regionno!=5 & regionno!=1), gdpcap ~ treat + post + treat:post)
+summary(regdd)
+```
+
+Podemos notar que el p-value del coeficiente de la Difference-In-Difference es relativamente alto.
+
+Efectuamos de todos modos un F-Test para estar seguro no poder rechazar la hipótesis nula.
+
+```{r}
+#f test
+linearHypothesis(regdd,"treat:post=0", test="F")
+qf(0.05, 1, 125, lower.tail=F)
+```
+
+Notamos que no podemos rechazar la hipótesis nula con un nivel de significatividad del 95%. Aun así el signo del coeficiente corresponde con lo que nos esperábamos a partir del análisis con el control sintético, aunque tengamos una desviación estándar bastante relevante.  
+
+## Análisis sobre diferentes grupos de controles
+
+Vimos en el análisis del estudio de Card como la elección del grupo de control pueda resultar fundamental en los resultados arrojados por la DD. Efectuamos por lo tantos un primer análisis con un diferente grupo de control, escogimos en particular para este las regiones de Madrid y Cataluña que vimos en el control sintético eran las únicas dos que tenían pesos positivos. Siendo que eran las dos economías más importantes de España en los años 60, mientras los Países Vascos eran la tercera, podemos suponer que tenían en esta década una estructura económico-productiva similar. 
+
+```{r, echo=FALSE}
+#graficos nuevos controles
+dbdd2 %>% 
+  filter(regionno==17|regionno==10|regionno==14) %>% 
+  mutate(treat = if_else(treat == 1, "País Vasco", "Madrid y Cataluña")) %>% 
+  ggplot(aes(year, gdpcap, color = as.factor(treat))) + 
+  geom_point() + geom_vline(xintercept = 1975, linetype = "dotted") +
+  geom_text(aes(x=1975, label="Inicio de conflicto", y =10), 
+            color = "black", angle=90, vjust = 1.2, size = 3) +
+  labs(color = "Región") +
+  theme(legend.position="bottom") 
+
+```
+
+```{r}
+#variacion grupo de control (madrid y cataluña)
+regdd2<- lm(data=subset(dbdd2,regionno==17|regionno==10|regionno==14), gdpcap ~ treat + post + treat:post)
+summary(regdd2)
+
+#f test para madrid y cataluña
+linearHypothesis(regdd2,"treat:post=0", test="F")
+qf(0.05, 1, 125, lower.tail=F)
+```
+
+Podemos notar que el efecto negativo parece intensificarse ligeramente (-0.43 vs -0.485) y la relativa desviación estándar tenuemente (0.474 vs 0.435). Aun así, la DD no resulta significativa al 5%.
+
+Finalmente intentamos utilizar como control solamente la región de Cataluña. Esto principalmente por tres razones:
+
+* En el control sintético la participación de esta región en la constitución de este resultó preponderante respeto a la de Madrid (0.851 vs 0.149)
+
+* Hay muchas semejanzas histórico-político-económica entre las dos regiones: ambas poseían una economía donde prevalía un sector segundario manufacturero, las dos pugnaban por su autonomía y, aún no lo lograron, tuvieron siempre una grande autonomía respeto a otras regiones españolas.
+
+* Cataluña, a diferencias de los países vascos, nunca experimentó un brote terrorista importante. 
+
+Efectuando la DIff-En-Diff obtenemos que:
+
+```{r, echo=FALSE}
+dbdd2 %>% 
+  filter(regionno==17|regionno==10) %>% 
+  mutate(treat = if_else(treat == 1, "País Vasco", "Cataluña")) %>% 
+  ggplot(aes(year, gdpcap, color = as.factor(treat))) + 
+  geom_point() + geom_vline(xintercept = 1975, linetype = "dotted") +
+  geom_text(aes(x=1975, label="Inicio de conflicto", y =9), 
+            color = "black", angle=90, vjust = 1.2, size = 3) +
+  labs(color = "Región") +
+  theme(legend.position="bottom") 
+```
+
+```{r}
+#variacion grupo de control (cataluña)
+regdd3<- lm(data=subset(dbdd2,regionno==17|regionno==10), gdpcap ~ treat + post + treat:post)
+summary(regdd3)
+```
+
+```{r}
+#f test para cataluña
+linearHypothesis(regdd3,"treat:post=0", test="F")
+qf(0.05, 1, 125, lower.tail=F)
+qf(0.1, 1, 125, lower.tail=F)
+```
+
+Vemos que el efecto del terrorismo vasco parece intensificarse (-0.807 vs -0.485) y, aunque la desviación estándar del estimador aumente (0.514 vs 0.435), aún no odemos rechazar la hipótesis nula (que no hubo impacto de la actividad terrorista del ETA sobre el crecimiento de la región) con un nivel de confianza del 90% aunque vemos como el p-value haya mejorados considerablemente.
+
+## Análisis sobre diferentes intervalos de tiempo
+
+En el análisis efectuado por Abadie y Gardeazabal [@ardie] para confirmar que el GAP entre el control sintético creado y la trayectoria del GDP real del país vasco es determinado por la actividad terrorista del ETA, efectúan un estudio placebo donde crean, con la misma metodología vista previamente, un control sintético para Cataluña. Efectivamente, en ausencia de terrorismo, el control sintético creado no difiere sustancialmente de la serie histórica factual.  Esto les permitió confirmar que el gap encontrando entre control sintético y GDP vasco era debido por el terrorismo de ETA. Efectuando este estudio, pero se dieron cuenta también que hay una desviación entre la serie histórica y el control sintético de Cataluña a partir del final de los años 80. En particular notaron que la economía a partir de estas fechas tuvo un “over-performing” respecto a lo demás de España. De igual forma acotamos inferiormente la serie temporal a 1965 para que podamos aislar el efecto del inicio de la actividad terrorista. 
+
+```{r}
+
+dbdd4 <- 
+  as_tibble(dbdd2)%>% 
+  filter(year %in% seq(1965, 1985, by = 1)) %>% 
+  filter(regionno==17|regionno==10) 
+regdd4 <- lm( gdpcap ~ treat*post, data=dbdd4) 
+summary(regdd4)
+
+```
+
+Efectuamos un F-Test para averiguar la significidad estadistica de los resultados obtenidos:
+
+```{r}
+linearHypothesis(regdd4,"treat:post=0", test="F")
+qf(0.05, 1, 125, lower.tail=F)
+qf(0.1, 1, 125, lower.tail=F)
+```
+
+Dado el acotamiento de la serie temporal vemos que no podemos rechazar la hipotesís nula (del impacto del terroismo sobre el crecimiento del GDP vasco) con una significacia del 90%.
+
+Finalmente realizamos unos tests de autocorrelación y heterocedasticidad para averiguar eventuales presencias de correlaciónes que afecten la validez de nuestros resultados.
+
+```{r}
+coeftest(regdd4, vcov. = vcovHAC(regdd4)) 
+coeftest(regdd4, vcov. = vcovHC(regdd4)) 
+coeftest(regdd4, vcov. = NeweyWest(regdd4))
+```
+
+
+Finalmente podemos ver como todos los estimadores de las diferentes DD resultaron congruentes desde un punto de vista del signo con el análisis en control sintético, ósea independientemente del grupo de control escogido notamos que resulta haber una afectación negativa en el GDP a partir del inicio del conflicto, indudablemente las deviaciones estándar siguen importantes y que la significiad estadistica se obtiene solo bajo determinadas hipotesís.
+
+```{r, echo=FALSE}
+#analisís comparativa
+stargazer(regdd, regdd2, regdd3,type="text")
+```
+
+
+## Análisis desviaciones estándares
+
+Hemos visto que, aunque finalmente encontramos un estimados significativo estadísticamente, tuvimos siempre lidiar con desviaciones estándares importantes. Según el análisis de Duflo y Bertrand [@duflo] y de Lang [@lang] generalmente los análisis DD son sujetos a posibles problemas de correlación que la mayoría de las veces vienen ignorados por los investigadores. Tres factores principales que determinan estas correlaciones:
+
+* utilizo de larga series de tiempo (16.5 periodos en promedio)
+* las variables dependientes utilizadas en la estimación DD son típicamente altamente correlacionadas positivamente en el tiempo
+
+* las variables dummies cambian poco adentro de un grupo a lo largo del tiempo.
+
+Esto tres efectos se alimentan uno con el otro determinando que el SE de $\hat{\beta}$ podría subestimar mucho la desviación estándar real de $\hat{\beta}$. Esto implica una “over-rejection” de la hipótesis nula que puede falsar las casualidades encontradas. 
+Para obviar a este problema y encontrar una varianza más significativa proponen:
+
+1. La corrección paramétrica simple (como la AR(1)) no es eficaz. Sobre todo en los estudios empíricos no logra dar una solución sencilla al extra rechazo.
+
+2. Técnicas no paramétricas como la block bootstrap sirven bien en caso de grupos suficientemente grandes. En este caso se mantiene la estructura de autocorrelación manteniendo las observaciones que pertenecen al mismo grupo juntas.  Resulta ser mejor de la técnica precedente.
+
+3. Dividir la serie de tiempo en dos grupos (pre y post intervención). Funciona bien cuando el número de grupos es relativamente pequeño (i.e. 10-20). Tiene dificultad cuando las políticas no se implementan al mismo tiempo en los diferentes grupos, aunque se puede obviar parcialmente a esto con algunas adaptaciones.
+
+4. Permitir una estructura de covarianza no limitada en la serie de tiempo en los mismos grupos. Esto funciona bien cuando el número de grupos es grande (i. e. 50). Aunque vimos en la primera técnica que las paramétricas no son muy efectivas, estas no tenían en cuenta que hay muchos estados que pueden ser usado para estimar el proceso de autocorrelación de manera más flexible, suponiendo que esto resulte ser el mismo a lo largo de todos los estados y que no haya "cross-sectional" heterocedasticidad. Bajo esta hipótesis este método permite llegar a un estimador consistente del error estándar cuando el número de grupos tiende al infinito.
+
+En nuestro análisis nos encontramos frente al caso número 2 donde tenemos un numero reducido de controles. Efectuamos por lo tanto la corrección sugerida colapsando la serie de tiempo en dos periodos, pre y post tratamiento (tomando la segunda regresión DD, con un grupo de control compuesto por Madrid y Cataluña)
+
+```{r, include=FALSE}
+#analisis desviación colapsando la serie historica
+
+menor<-subset(dbdd2, year<1975)
+meanmenor<-aggregate(menor, list(menor$regionno),mean)
+mayor<-subset(dbdd2, year>=1975)
+meanmayor<-aggregate(mayor, list(mayor$regionno),mean)
+dbmean<-union(meanmenor,meanmayor)
+
+
+```
+
+
+
+```{r}
+ddmean<-lm(gdpcap ~ treat*post, data=dbmean, subset=(regionno==17|regionno==10 | regionno==14))
+
+summary(ddmean)
+
+stargazer(ddmean, regdd2, type="text")
+```
+
+
+Efectivamente encontramos que podríamos estar subestimando la desviación estándar del estimador DD, aunque la comparación con el análisis de control sintético nos permite confiar en el signo de la afectación encontrado (0.722 vs 0.435) y parcialmente de la magnitud de este: en el análisis sintético encontramos una disminución potencial del GDP del 4.12% muy similar a la que obtenemos con la regresión "semi-elastica".
+
+```{r}
+#analisis semielasticidad comparativa con el sintetico
+regdd2log<- lm(data=subset(dbdd2,regionno==17|regionno==10|regionno==14), log(gdpcap) ~ treat + post + treat:post)
+coef(regdd2log)
+```
+
+## Test de robustez
+Finalmente vamos a verificar la robustez de nuestro análisis cambiando el grupo de control, simulando que el grupo tratado (ósea afectado por el terrorismo de ETA) sea otra región española escogida aleatoriamente:
+
+```{r}
+#analisis robustez con grupo "ficticio" afectado
+dbpla<- mutate(db3,post=ifelse(year>=1975,1,0))
+dbpla2<- mutate(dbpla,treat=ifelse(regionno==8,1,0))
+regpla<- lm(data=subset(dbpla2,regionno!=5 & regionno!=1& regionno!=17), gdpcap ~ treat + post + treat:post)
+summary(regpla)
+```
+
+Vemos como en este caso tenemos valores para el estimador de la DD resulte ser cercano a 0 y su desviación estándar no permita ninguna inferencia estadísticamente significativa. 
+
+
+# Conclusiones
+
+Por medio de nuestro análisis podemos verificar que, así como en el caso del estudio del desembarco de los Marielitos, los análisis de control sintético y difference-in-difference arrojan resultados similares, hay congruencia en signo y magnitudes de la afectación. Por otra parte, los intervalos de confianzas encontrados indican que hay una causalidad estadísticamente significativa entre el brote terrorista y la disminución del crecimiento de la región vasca, aunque la problemática relativa a una subestimación de la desviación estándar del estimador, a causa de la autocorrelación, de los datos no se puede excluir. Además vimos como la significancia estadistica de los resultados obtenidos es fuertemente afectada por el grupo de control y el periodo de tiempo escogido. Esto nos hace reflexionar sobre la importancia de una análisis cualitativa que permite aislar efecto peculiares y obtener resultados robustos.   
+
+Finalmente, el análisis cualitativo nos pone frente a unos interrogantes respeto a:
+
+* validez interna: fenómenos de spillover, variables omitidas y correlaciones.
+* validez externa: peculiaridades históricas, políticas y económicas de la región vasca.
+
+
+# Bibliografia
